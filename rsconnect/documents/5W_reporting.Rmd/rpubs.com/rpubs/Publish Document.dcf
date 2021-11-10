@@ -1,0 +1,11 @@
+name: Publish Document
+title:
+username:
+account: rpubs
+server: rpubs.com
+hostUrl: rpubs.com
+appId: https://api.rpubs.com/api/v1/document/832746/4759a828853a41c59faabb98d542c55f
+bundleId: https://api.rpubs.com/api/v1/document/832746/4759a828853a41c59faabb98d542c55f
+url: http://rpubs.com/seanywng/832746
+when: 1636557307.14685
+lastSyncTime: 1636557307.14685
