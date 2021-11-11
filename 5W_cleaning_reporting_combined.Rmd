@@ -1,20 +1,27 @@
 ---
-title: "Report on Education 5W data -- Venezuela"
+title: "Cleaning and Reporting on Education 5W data from Venezuela"
 author: "Sean Ng"
 date: "`r format(Sys.Date(), format='%d %B, %Y')`"
 output:
   html_document:
-    toc: yes
-    number_sections: yes
-    code_download: yes
+    toc: true
+    toc_float: true
+    toc_depth: 4
+    number_sections: false
+    collapsed: false
+    code_download: true
+    theme: readable
 ---
+
+# A. Cleaning the 5W data
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = FALSE, warning = FALSE, message = FALSE,
-                      fig.width = 10)
+                      fig.width = 9.5)
 library(tidyverse)
 library(lubridate)
 library(stringr)
+library(stringi)
 library(pander)
 library(scales)
 library(forcats)
@@ -30,19 +37,357 @@ library(plotly)
 library(kableExtra)
 library(DT)
 library(tinytex)
-library(webshot)
 
-# pander thousands separator
+# tables all in one row
+panderOptions('table.split.table', Inf)
+
+# thousands separator
 panderOptions("big.mark", ",")
 
-# MAKE SURE YOU READ IN THE RIGHT FILE -- CHECK TIMESTAMP
-act_ben <- read_csv("211108_0113_act_ben.csv") 
-u_ben <- read_csv("211108_0113_u_ben.csv") 
+```
 
-# sum(act_ben$beneficiarios)
-# sum(u_ben$beneficiarios)
+&nbsp;
 
-# census reference datasets
+> This first section details an example of the code necessary for cleaning a 5W dataset in R. 5W data is typically messy and in wide format. Additionally, data wrangling is time consuming and an inefficient use of a specialist's time. The code presented below intends to demonstrate that this monthly (or more frequent) occurence can be greatly automated, allowing for more timely and accurate analysis as well as creating the space for more tailored reporting.  
+
+&nbsp;
+
+## 1. Reading in the dataset
+
+```{r reading-in-xlsx, echo=TRUE}
+# specifying column types 
+act_col_types <- c("date", "date", "text", "text","text","text",
+                   "text","text","text","text","text","text","text",
+                   "numeric", "numeric", "text","text","text",
+                   "text","text","text", "numeric", "text", 
+                   "date", "date", "text", "numeric", "numeric",
+                   "logical", "numeric", "numeric", "numeric",
+                   "numeric", "numeric", "numeric", "numeric",
+                   "numeric", "numeric", "numeric", "numeric",
+                   "numeric", "numeric", "numeric")
+
+# you're gonna have to live with the error messages,
+# since you can't slice before read_excel() argument
+
+act1<- read_excel("database activities 5W.xlsx", 
+                     sheet = "data", 
+                     skip = 1, 
+                     col_types = act_col_types) %>% 
+  clean_names() %>% 
+  remove_empty() %>% 
+  slice(-c(1)) %>% # removes the second row
+  slice(-c(12055)) # removes the grand total
+
+```
+&nbsp;
+
+## 2. String Manipulation and Recoding 
+
+### 2a. Renaming Columns 
+
+> Instead of showing a long vector of column names, here is a `glimpse()` of the renamed dataset: 
+
+```{r}
+act_names <- c("fecha_reportado_cluster",
+               "mes_reportado",
+               "codigo_de_proyecto",
+               "nombre_del_proyecto",
+               "organizacion_lider",
+               "organizacion_implementadora",
+               "estado",
+               "pcode1",
+               "municipio",
+               "pcode2",
+               "parroquia",
+               "pcode3",
+               "ubicacion",
+               "latitud",
+               "longitud",
+               "actividad_full",
+               "actividad_codigo",
+               "actividad_desc",
+               "actividad_codigo_desc",
+               "act_covid",
+               "unidad",
+               "cantidad_del_mes",
+               "recurrente_beneficiarios",
+               "fecha_de_inicio",
+               "fecha_prevista_finalizacion",
+               "estatus_actividad",
+               "total_beneficiarios",
+               "check_beneficiaries",
+               "t_f_ben",
+               "percent_poblacion_indigena",
+               "percent_personas_con_discapacidad",
+               "m_0_3",
+               "m_3_6",
+               "m_7_12",
+               "m_12_17",
+               "m_18_19",
+               "f_0_3",
+               "f_3_6",
+               "f_7_12",
+               "f_12_17",
+               "f_18_19",
+               "f_mayores_de_19",
+               "m_mayores_de_19")
+
+# renamed 
+names(act1) <- act_names
+
+glimpse(act1)
+```
+
+### 2b. Removing accents and standardising case
+
+```{r remove-accents, echo=TRUE}
+# function to remove accents
+rm_accent <- function(colns){
+  colns <- stri_trans_general(colns, "Latin-ASCII")
+}
+
+# removing accents
+act1 <- act1 %>% 
+  mutate(estado    = rm_accent(str_to_upper(estado)), # string to upper and rm_accent
+         municipio = rm_accent(str_to_upper(municipio)),
+         parroquia = rm_accent(str_to_upper(parroquia)),
+         ubicacion = rm_accent(str_to_upper(ubicacion)),
+         actividad_desc = rm_accent(str_to_upper(actividad_desc)))
+
+```
+
+### 2c. Recoding erroneous data
+
+> And mutating a new date column just with the month
+
+```{r recoding, echo=TRUE}
+# recoding 
+act1 <- act1 %>% 
+  mutate(recurrente_beneficiarios = 
+           recode(recurrente_beneficiarios, 
+            "no" = FALSE, "No" = FALSE, "Si" = TRUE, "si" = TRUE, "sí" = TRUE, "Sí" = TRUE),
+         act_covid = recode(act_covid, 
+            "no" = FALSE, "No" = FALSE, "Si" = TRUE, "si" = TRUE, "sí" = TRUE, "Sí" = TRUE)) %>% 
+  replace_na(list(recurrente_beneficiarios = FALSE, act_covid = FALSE)) 
+
+# recoding estatus_actividad
+act1$estatus_actividad <- act1$estatus_actividad %>% 
+  str_replace_all(c("En ejecucion" = "ejecucion", 
+                    "en ejecución" = "ejecucion", 
+                    "en Ejecución" = "ejecucion",
+                    "En ejecución" = "ejecucion",
+                    "En Ejecución" = "ejecucion",
+                    "finalizada" = "finalizada",
+                    "Finalizada" = "finalizada"))
+
+# create a new variable of last day of month only 
+act1$mes_solo <- ceiling_date(act1$mes_reportado, "month") - days(1)
+```
+
+&nbsp;
+
+## 3. Cleaning locations 
+
+### 3a. Read in `locations.csv`
+
+> And check if you need to update it
+
+```{r read-locations, echo=TRUE}
+locations <- read_csv("locations.csv") %>%
+  mutate(estado    = rm_accent(str_to_upper(estado)),
+         municipio = rm_accent(str_to_upper(municipio)),
+         parroquia = rm_accent(str_to_upper(parroquia)),
+         ubicacion = rm_accent(str_to_upper(ubicacion)))
+```
+
+```{r, locations-check, echo=TRUE}
+# see if you need to update locations 
+ locations_add <- act1 %>% 
+   select(estado, pcode1, municipio, pcode2, parroquia, pcode3, ubicacion) %>% 
+   distinct() %>% 
+   anti_join(locations, by = "ubicacion")
+```
+
+
+### 3b. Splitting the dataset into clean and dirty
+> This section reads in the locations reference dataset then uses it to clean `adm_dirty` and rewrites it to `adm_dirty1`. The `distinct()` call at the end is to ensure that no duplicates are included as the `left_join()` argument will product duplicates. After which, `adm_clean` and `adm_dirty1` are combined into `act2`. 
+
+> As a note, there is a to include a set of new pcodes -- "todo municipio" and  "todo estado". 
+
+```{r split-clean-dirty, echo=TRUE}
+# splitting into two datasets, one clean one dirty. 
+adm_dirty <- act1 %>% 
+  filter(is.na(estado) | is.na(pcode1) |
+         is.na(municipio) | is.na(pcode2) |
+         is.na(parroquia) | is.na(pcode3))
+
+adm_clean <- act1 %>% 
+  filter(!is.na(estado) & !is.na(pcode1) &
+         !is.na(municipio) & !is.na(pcode2) &
+         !is.na(parroquia) & !is.na(pcode3)) 
+
+```
+
+### 3c. Fill in missing values with `coalesce()`
+
+```{r fill in missing values, echo=TRUE}
+# filling in missing values
+adm_dirty <- adm_dirty %>% 
+  left_join(locations, by = "ubicacion") %>% 
+  mutate(estado    = coalesce(estado.x, estado.y),
+         pcode1    = coalesce(pcode1.x, pcode1.y),
+         municipio = coalesce(municipio.x, municipio.y),
+         pcode2    = coalesce(pcode2.x, pcode2.y),
+         parroquia = coalesce(parroquia.x, parroquia.y),
+         pcode3    = coalesce(pcode3.x, pcode3.y)) %>% 
+  select(-estado.x, -estado.y, -pcode1.x, -pcode1.y,
+         -municipio.x, -municipio.y, -pcode2.x, -pcode2.y,
+         -parroquia.x, -parroquia.y, -pcode3.x, -pcode3.y) %>% 
+  distinct() # removing duplicate rows from the join 
+
+# bind_rows() does not care about column sequence 
+# but put adm_clean first so that the original order is preserved
+act2 <- bind_rows(adm_clean, adm_dirty)
+
+```
+
+### 3d. Error checking the join
+> printing total beneficiaries for `act1` and `act2`, followed by `nrow()` for both. 
+
+```{r join-error-check}
+# error checking
+sum(act1$total_beneficiarios, na.rm = TRUE)
+sum(act2$total_beneficiarios, na.rm = TRUE)
+nrow(act1)
+nrow(act2)
+```
+
+&nbsp;
+
+## 4. Beneficiary disaggregation 
+> This is to check that `total_beneficiarios` is equal to the sum of all disaggregated columns. First, we mutate a new column by summing all the disaggregated beneficiaries and calling it `total_ben_check`. The next function prints the differences between `total_ben_check` and `total_beneficiarios`. Finally, we mutate a new column in the dataset called `no_esp_ben` or beneficiarios no especificados to collect the differences and ensure that we do not lose them. 
+
+```{r bencheck-and-no-esp-ben, echo=TRUE }
+# mutating bencheck and unspecified beneficiaries columns 
+act2 <- act2 %>% 
+  mutate(total_ben_check = select(., m_0_3:m_mayores_de_19) %>%  rowSums(na.rm = TRUE), 
+         no_esp_ben      = round(total_beneficiarios) - round(total_ben_check)) 
+
+```
+
+> Next, we print rows where the sum of disaggregated beneficiaries do not match the totals reported in the `total_beneficiarios` column. 
+
+```{r printing-bencheck}
+# printing the bencheck
+# the round is necessary due to floating point arithmetic as some values are
+# close enough to 0 to be ignored by us but not by R. 
+# only pander() if you want to read the html
+no_esp <- act2 %>% 
+  filter(round(total_beneficiarios) != round(total_ben_check)) %>% 
+  select(organizacion_implementadora, actividad_desc, 
+         ubicacion, total_ben_check, total_beneficiarios, no_esp_ben)
+
+kable(no_esp, caption = "Undisaggregated beneficiaries") %>%
+  kable_styling(bootstrap_options = "bordered", font_size = 12)
+```
+
+&nbsp;
+
+## 5. Outputs
+
+### 5a. Cleaned wide version
+```{r datestamp, echo=TRUE}
+# timestamp for all the files to be written below
+now <- Sys.time()
+```
+
+> For submissions to OCHA, this one aligns with their format
+
+```{r cleaned-wide, echo=TRUE, eval=FALSE}
+# turn on eval if you want the file
+filename_wide <- paste0(format(now, "%y%m%d_%H%M_"), "5W_wide.csv")
+write_csv(act2, filename_wide)
+```
+
+### 5b. Unique beneficiaries
+
+> This section pivots the dataset longer into tidy data which, with one observation per instance of age and sex; this is necessary for easy plotting and additional operations. Additionally, rows with no beneficiaries are filtered out. 
+
+> The dataset `u_ben` is created by taking the highest number of beneficiaries by age and sex group by location. The columns are then filtered down to create a more usable dataset. We will use this dataset for any operations related to unique beneficiaries (individuals), including comparisons with census data to determine reach and coverage. Please note that not all activities will be represented in this dataset as only the max of beneficiaries per disaggregation group per location was selected. 
+
+```{r unique-benficiaries, echo=TRUE}
+# pivoting longer and creating new dataframe
+  
+u_ben <- act2 %>% 
+  select(-t_f_ben, -total_ben_check) %>% # remember to drop them
+  relocate(mes_solo) %>% # moves mes_solo to the first variable
+  pivot_longer(m_0_3:no_esp_ben, 
+               names_to = "desagregacion", values_to = "beneficiarios") %>% 
+  filter(recurrente_beneficiarios == FALSE) %>%
+  filter(beneficiarios != 0) %>% # empty cells are 0 in the 5W table
+  group_by(ubicacion, desagregacion) %>% 
+  slice(which.max(beneficiarios)) %>% 
+  ungroup() %>% 
+  select(mes_solo, estado, pcode1, municipio, pcode2,parroquia, pcode3, 
+         ubicacion, latitud, longitud,
+         desagregacion, beneficiarios)
+```
+
+```{r writing-u-ben-csv, echo=TRUE, eval=FALSE}
+# writing csv of u_ben with datestamp
+# turn on eval if you want the file 
+filename_u_ben <- paste0(format(now, "%y%m%d_%H%M_"), "u_ben.csv")
+write_csv(u_ben, filename_u_ben)
+```
+
+
+### 5c. Beneficiaries by activity
+
+> The dataset `act_ben` is for activity totals. Only the rows marked as `recurrente_beneficiarios == FALSE` have been selected. The first instance of recurring beneficiaires is marked FALSE, with all subsequent entries being marked TRUE. Similar to `u_ben`, it has also been pivoted longer into tidy data. 
+
+> Please not that we can only assure that there no duplications within locations as specific locations might have been targetted by more than one activity. For geographic operations, please use `u_ben`.
+
+```{r beneficiaries-by-activity, echo=TRUE}
+# This is the dataset for beneficiaries
+act_ben <- act2 %>%
+  select(-t_f_ben, -total_ben_check) %>% # remember to drop them
+  relocate(mes_solo) %>% # moves mes_solo to the first variable
+  filter(recurrente_beneficiarios == FALSE) %>%
+  pivot_longer(m_0_3:no_esp_ben, 
+               names_to = "desagregacion", values_to = "beneficiarios") %>% 
+  filter(beneficiarios != 0) %>% # empty cells are 0 in the 5W table
+  group_by(ubicacion, desagregacion) %>% 
+  select(mes_solo, nombre_del_proyecto, organizacion_implementadora, 
+         estado, pcode1, municipio, pcode2, parroquia, pcode3, 
+         ubicacion, latitud, longitud,
+         actividad_codigo, actividad_desc, act_covid,
+         desagregacion, beneficiarios)
+
+```
+
+
+```{r writing-act-ben-csv, echo=TRUE, eval=FALSE}
+# writing csv act_ben with datestamp
+# turn on eval if you want the file 
+filename_act_ben <- paste0(format(now, "%y%m%d_%H%M_"), "act_ben.csv")
+write_csv(act_ben, filename_act_ben)
+```
+
+### 5d. Comparing `u_ben`, `act_ben` and difference
+
+```{r comparing}
+
+(sum(u_ben$beneficiarios))
+(sum(act_ben$beneficiarios))
+(sum(act_ben$beneficiarios) - sum(u_ben$beneficiarios))
+```
+
+&nbsp;
+
+# B. Reporting on the 5W data 
+
+```{r report-setup, include=FALSE}
+# read in census reference dataset
 cen_ref <- read_excel("census_data_20191122.xlsx", sheet = "data") %>% 
   clean_names() %>%
   select(estado, pcode1, municipio, pcode2, parroquia, pcode3, field_office,
@@ -61,7 +406,7 @@ CA105 <- act_ben %>% filter(actividad_codigo == "CA1.05")
 # creating datasets without CA1.05 and
 # for act_ben, recoding UNICEF and mutating short activity descriptions
 act_ben2 <- act_ben %>% 
-  filter(!str_detect(.$ubicacion, "^RADIO")) %>% 
+  filter(actividad_codigo != "CA1.05") %>% 
   mutate(organizacion_implementadora = 
            str_replace_all(organizacion_implementadora, 
                            "UNICEF - Fondo de las Naciones Unidas para la Infancia",
@@ -79,7 +424,524 @@ act_ben2 <- act_ben %>%
                              CA2.10 = "2.10_becas docentes"))
                     
 u_ben2 <- u_ben %>% filter(!str_detect(.$ubicacion, "^RADIO"))
+```
 
+&nbsp;
 
+> This is an entirely automated report -- all charts and tables, as well as all figures within the report have been generated from the data, with no manual input. This report makes use of the outputs of the `5W_cleaning` section above. This set of 5W data pertains to the Education Cluster in Venezuela and has had partner information removed. Code will not be shown in this section.  
+
+&nbsp;
+
+## 1. Summary of beneficiaries by activity, with sex ratio
+
+```{r summary-TABLE-activity-and-sex}
+
+# as a note, i don't think you can put an str_detect inside a summarise
+act_ben2 %>% 
+  mutate(sex_ben = ifelse(str_detect(desagregacion, "^m"), "male",
+                          ifelse(str_detect(desagregacion, "^f"), "female", "no_esp"))) %>% 
+  mutate(actividad = actividad_desc) %>% 
+  group_by(actividad) %>% 
+  summarise(total = sum(beneficiarios, na.rm = TRUE),
+            male = sum((beneficiarios[sex_ben == "male"])),
+            female = sum((beneficiarios[sex_ben == "female"])),
+            sex_ratio = round((male/female), digits = 2)) %>% 
+  mutate(percent_of_total = round((total / sum(total) * 100), digits = 2)) %>% 
+  relocate(percent_of_total, .after = total) %>% 
+  arrange(desc(total)) %>% 
+  pander(big.mark = ",", style = "rmarkdown")
 
 ```
+
+> A total of __`r format(round(sum(u_ben2$beneficiarios)), big.mark = ",")`__ individuals have been reached to date. In terms of frequencies (inclusive of double counting), __`r format(sum(act_ben2$beneficiarios), big.mark = ",")`__ have been reached. 
+
+> Additionally, the __`r format(sum(CA105$beneficiarios), big.mark = ",")`__ beneficiary frequencies reached by the activity PROMOCION MENSAJES CLAVES PARA LA COMUNIDAD ESCOLAR have been removed from the totals in this report as the activity consists of solely radio messaging. 
+
+&nbsp;
+
+## 2. Beneficiaries by age group
+*figures are unique beneficiaries/individuals*
+
+```{r PLOT-beneficiaries-by-age}
+# to reorder the plot
+ordvec <- c("0-3", "3-6", "7-12", "12-17", "18-19", "mayor_que_19")
+
+# df for the plot
+age_u_ben <- u_ben2 %>% # important to use u_ben here 
+  mutate(age_ben = case_when(
+    str_detect(desagregacion,"0_3$") ~ "0-3",
+    str_detect(desagregacion,"3_6$") ~ "3-6",
+    str_detect(desagregacion, "7_12$") ~ "7-12", 
+    str_detect(desagregacion, "12_17$") ~ "12-17",
+    str_detect(desagregacion, "18_19$") ~ "18-19",
+    str_detect(desagregacion, "mayores_de_19$") ~ "mayor_que_19", 
+    TRUE ~ "no_esp")) %>%
+  filter(age_ben != "no_esp") %>% 
+  group_by(age_ben) %>% 
+  summarise(beneficiarios = sum(beneficiarios))
+
+ggplot(data = age_u_ben, aes(x = fct_reorder(age_ben, ordvec), y = beneficiarios)) +
+  geom_col(fill = "cornflowerblue") +
+  geom_text(aes(label = scales::comma(beneficiarios)), vjust = -0.25, size = 4) +
+  scale_y_continuous(labels = unit_format(unit = "K", scale = 1e-3, sep = "")) +
+  xlab("Grupos por Edad") + ylab("Beneficiarios") +
+  theme(axis.text = element_text(size = 10))
+
+```
+
+&nbsp;
+
+### 2a. Beneficiaries by age compared to 2017 Enrollment
+
+```{r REF-matric-ben}
+# reference df for the table and text below, restructuring enrollment data from cen_ref
+matric_ben <- cen_ref %>% 
+  select(matricula_2017_educacion_inicial, matricula_2017_educacion_primaria, 
+         matricula_2017_educacion_media) %>%
+  rename("3-6" = matricula_2017_educacion_inicial,
+         "7-12" = matricula_2017_educacion_primaria,
+         "12-17" = matricula_2017_educacion_media) %>% 
+  pivot_longer(everything(), names_to = "age_ben", values_to = "matricula2017", 
+               values_drop_na = TRUE) %>% 
+  group_by(age_ben) %>% 
+  summarise(matricula2017 = sum(matricula2017)) %>%
+  left_join(age_u_ben) %>% 
+  mutate(percent_total = beneficiarios/matricula2017 * 100) %>% 
+  relocate(beneficiarios, .after = age_ben) %>% 
+  rename(`Edad grupo` = age_ben) %>% 
+  slice(2,3,1)  # rearranging rows
+  
+```
+
+> With reference to the 2017 Matricula dataset, we can see that the Education programme has reached an overall average of __`r round(sum(matric_ben$beneficiarios)/(sum(matric_ben$matricula2017))*100)`%__ of schoolgoing children aged 3-17 nationwide. Children aged 3-17 consitute __`r round(sum(matric_ben$beneficiarios)/(sum(u_ben2$beneficiarios))*100)`%__ of all UNICEF beneficiaries. 
+
+```{r TABLE-matric-ben}
+pander(matric_ben, big.mark = ",", style = "rmarkdown")
+```
+
+&nbsp;
+
+## 3. Changes since previous month
+
+```{r REF-for-text-cumulative-datasets}
+
+# creating reference dfs for the text and plot below
+cum_u_ben <- u_ben2 %>% 
+  mutate(mes_solo = as.Date(mes_solo)) %>% 
+  arrange(mes_solo) %>% 
+  group_by(mes_solo) %>% 
+  summarise(sum_ben = sum(beneficiarios)) %>% 
+  mutate(cumulative = cumsum(sum_ben))
+
+cum_act_ben <- act_ben2 %>% 
+  mutate(mes_solo = as.Date(mes_solo)) %>% 
+  arrange(mes_solo) %>% 
+  group_by(mes_solo) %>% 
+  summarise(sum_ben = sum(beneficiarios)) %>% 
+  mutate(cumulative = cumsum(sum_ben))
+```
+
+> The number of individuals reached has increased by __`r format(cum_u_ben[11,3] - cum_u_ben[10,3], big.mark = ",")`__ in the past month, reaching a total of __`r format(round(sum(u_ben2$beneficiarios)), big.mark = ",")`__. The number of beneficiary frequencies reached has increased by __`r format(cum_act_ben[11,3] - cum_act_ben[10,3], big.mark = ",")`__ in the same period, reaching a total of __`r format(sum(cum_act_ben[11,3]), big.mark = ",")`__.
+
+```{r  line-PLOT-cumulative-beneficiaries}
+u_ben2 %>% 
+  mutate(mes_solo = as.Date(mes_solo)) %>% 
+  arrange(mes_solo) %>% 
+  group_by(mes_solo) %>% 
+  summarise(sum_ben = sum(beneficiarios)) %>% 
+  mutate(cumulative = cumsum(sum_ben)) %>% 
+  ggplot(aes(x = mes_solo, y = cumulative)) +
+  geom_line() +
+  geom_text(aes(label = scales::comma(cumulative)), vjust = -0.25, hjust = 1, size = 3) +
+  scale_x_date(date_labels = "%b-%Y", date_breaks = "1 month") +
+  scale_y_continuous(labels = scales::unit_format(unit = "K", scale = 1e-3, sep = ""),
+                     breaks = seq(0,950000, by = 200000)) + # what is this breaks doing?
+  xlab("Mes Reportado") + ylab("Beneficiarios (cumulativo)")
+```
+
+&nbsp;
+
+### 3a. Progress by activity by month
+*mouse over to see details*
+
+
+```{r line-PLOTLY-progress-by-activity, fig.width=9}
+act_lines <- act_ben2 %>% 
+  mutate(mes_solo = as.Date(mes_solo)) %>% 
+  group_by(actividad_short, mes_solo) %>% 
+  summarise(cumulative = sum(beneficiarios)) %>% 
+  mutate(cumulative = round(cumsum(cumulative))) %>% 
+  ggplot(aes(x = mes_solo, y = cumulative, colour = actividad_short)) +
+  geom_line() +
+  geom_point(size = 0.7) +
+  scale_x_date(date_labels = "%b-%Y", date_breaks = "1 month") +
+  scale_y_continuous(labels = unit_format(unit = "K", scale = 1e-3, sep = ""), 
+                     limits = c(0, 500000)) +
+  xlab("") + ylab("Beneficiarios") +
+  scale_colour_discrete(name = "Actividad") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1),
+        legend.position = "bottom",
+        legend.text = element_text(size = 6)) +
+  guides(fill = guide_legend(nrow = 2, byrow = TRUE))
+
+ggplotly(act_lines, tooltip = c("x", "y", "colour")) %>% 
+  layout(showlegend = TRUE, legend = list(font = list(size = 6))) %>% 
+   config(displayModeBar = FALSE)
+```
+> Progress in recent months has largely been due to the distribution of education kits and distance learning. 
+
+&nbsp;
+
+## 4. Summaries by geography
+
+### 4a. Beneficiaries by state
+
+```{r PLOT-beneficiairies-by-state}
+u_ben2 %>% 
+  group_by(estado) %>% 
+  summarise(beneficiarios = sum(beneficiarios)) %>%
+  ggplot(aes(x = fct_reorder(estado, beneficiarios, .desc = TRUE), 
+             y = beneficiarios)) +
+  geom_col(fill = "cornflowerblue") +
+  ylim(0, 850000) +
+  geom_text(aes(label = scales::comma(beneficiarios, accuracy = 1)), 
+            vjust = -0.25, hjust = 0.05, size = 3, angle = 30) +
+  scale_y_continuous(labels = unit_format(unit = "K", scale = 1e-3, sep = ""), 
+                     limits = c(0, 200000)) +
+  xlab("") + ylab("Beneficiarios") + 
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+```
+
+&nbsp;
+
+```{r REF-for-ubicacion-text}
+mira_zul <- u_ben2 %>% filter(estado == "MIRANDA" | 
+                              estado == "ZULIA")
+```
+
+### 4b. Number of schools by state
+> A total of __`r format(n_distinct(u_ben2$ubicacion), big.mark = ",")`__ schools have been reached by UNICEF; __`r round((n_distinct(mira_zul$ubicacion)) / (n_distinct(u_ben2$ubicacion)) * 100)`%__ are from Miranda and Zulia alone. 
+
+```{r PLOT-of-ubicacion-by-state}
+u_ben2 %>% 
+  group_by(estado) %>% 
+  distinct(ubicacion) %>% 
+  summarise(ubicacion = n()) %>% 
+  ggplot(aes(x = fct_reorder(estado, ubicacion, .desc = TRUE), y = ubicacion)) +
+  geom_col(fill = "cornflowerblue") +
+  geom_text(aes(label = round(ubicacion)), vjust = -0.25, size = 3) + 
+  xlab("") + ylab("Numero de Escuelas") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+```
+
+&nbsp;
+
+```{r REF-for-all_mun}
+# creating the all_mun df
+# all_mun is one obs per pcode2
+all_mun <- u_ben2 %>% 
+  mutate(is_matric = case_when( # for beneficiaries aged 3-17
+        str_detect(desagregacion,"3_6$") ~ "matric",
+        str_detect(desagregacion,"7_12$") ~ "matric",
+        str_detect(desagregacion,"12_17$") ~ "matric",
+        TRUE ~ "non_matric")) %>% 
+  mutate(beneficiarios_3_17 = ifelse(is_matric == "matric", beneficiarios, 0)) %>% 
+  group_by(estado, municipio, pcode2) %>% 
+  summarise(beneficiarios = round(sum(beneficiarios)),
+            beneficiarios_3_17 = round(sum(beneficiarios_3_17))) %>%
+  ungroup() %>% 
+  left_join(act_ben %>% # bringing activity counts into u_ben
+            group_by(pcode2) %>% 
+            summarise(act_types = n_distinct(actividad_codigo))) %>% 
+  right_join(cen_ref %>% # for bringing matricula2017 into all_mun
+            pivot_longer(cols = c("matricula_2017_educacion_inicial",
+                              "matricula_2017_educacion_primaria", 
+                              "matricula_2017_educacion_media"), 
+                     names_to = "age_ben", values_to = "matricula2017", 
+                     values_drop_na = TRUE) %>% 
+            select(pcode2, age_ben, matricula2017) %>% 
+            group_by(pcode2) %>% 
+            summarise(matricula2017 = sum(matricula2017))) %>% 
+  mutate(coverage_percent = round(beneficiarios_3_17 / matricula2017 * 100)) %>% 
+  mutate(estado = fct_reorder(estado, beneficiarios, .desc = TRUE)) %>% 
+  arrange(desc(beneficiarios))
+```
+
+### 4c. Scatterplot of municipalities
+*logarithmic scale; larger points indicate more beneficiaries reached, darker blues indicate more activity types* 
+
+*mouse over municipalities to see beneficiaries and distinct activities*
+
+> A total of __`r n_distinct(u_ben2$pcode2)`__ municipalities were reached by the UNICEF Education programme.
+
+```{r scatter-PLOTLY-of-municipalities-by-state, fig.width=9}
+
+all_mun_points <- all_mun %>% 
+  ggplot(aes(text = municipio, x = estado, y = beneficiarios, 
+             colour = act_types)) +
+  geom_point(aes(size = beneficiarios), alpha = 0.9) +
+  scale_colour_gradient(low = "azure4", high = "darkblue") + #find a better colour?
+  scale_y_continuous(trans = "log10", 
+                     labels = comma) +
+  xlab("") + ylab("Beneficiarios Alcanzados por Municipio") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  theme(legend.position = "none") 
+
+ggplotly(all_mun_points, tooltip = c("text", "y", "colour")) %>% 
+  config(displayModeBar = FALSE)
+
+```
+
+&nbsp;
+
+### 4d. Top 10 municipalities by reach and coverage
+
+```{r municipalities-top-TABLE}
+# top municipalities table
+top_mun <- all_mun %>% select(estado, municipio, beneficiarios) %>% slice(1:10)
+
+# try to make a table of the most oversubscribed municipalities
+top_cov <- all_mun %>% 
+  arrange(desc(coverage_percent)) %>% 
+  select(estado, municipio, coverage_percent) %>% slice(1:10)
+
+# two tables side by side
+kable(top_mun, caption = "by beneficiaries") %>%
+  kable_styling(bootstrap_options = "bordered", full_width = FALSE, 
+                position = "float_left", font_size = 12)
+kable(top_cov, caption = "by coverage") %>%
+  kable_styling(bootstrap_options = "bordered", full_width = FALSE, 
+                position = "left", font_size = 12)
+```
+
+```{r REF-for-text-below}
+# sum of top ten
+top_mun_sum <- all_mun %>% 
+  slice(1:10) %>% summarise(sum = sum(beneficiarios, na.rm = TRUE))
+
+all_mun_sum <- all_mun %>% 
+  summarise(sum = sum(beneficiarios, na.rm = TRUE))
+```
+
+> Together, the 10 municipalities with the highest reach (above left) form __`r round(top_mun_sum / all_mun_sum * 100)`%__ of the __`r format(round(sum(u_ben2$beneficiarios)), big.mark = ",")`__ beneficiaries reached. The average coverage of the school-age population in the municipalities where UNICEF is present is __`r round(mean(all_mun$coverage_percent, na.rm = TRUE))`%__. Coverage refers to the percentage of enrolled children (aged 3-17 years) reached by UNICEF. 
+
+&nbsp;
+
+### 4e. Histogram of Coverage
+
+> Below is a histogram of munciipalities where UNICEF is present showing the coverage of enrolled children (aged 3-17). Of note, we have reached 10% or less of the population in __`r sum(all_mun$coverage_percent <= 10, na.rm = TRUE)`__ out of the __`r n_distinct(u_ben2$pcode2)`__ in which we operate. This is in addition to the __`r sum(is.na(all_mun$coverage_percent))`__ where no UNICEF Education activities have occurred. 
+
+```{r PLOT-histogram-of-coverage}
+all_mun %>% 
+  ggplot(aes(x = coverage_percent)) +
+  geom_histogram(binwidth = 10, colour = "black", fill = "white") +
+  stat_bin(binwidth = 10, geom = "text", aes(label = ..count..), vjust = -0.5) +
+  scale_x_continuous(breaks = c(0, 10, 20, 30, 40, 50, 60, 70, 80, 90)) +
+  ylab("Number of municipalities") + xlab("Percent of enrolled children (3-17) covered")
+
+```
+
+&nbsp;
+
+## 5. Reports about partners
+
+### 5a. Summary by partner
+
+```{r PLOTLY-stacked-bar-partner, fig.width=9}
+# for the totals per partner shows in the geom_text below
+stack_text <- act_ben2 %>% 
+  group_by(organizacion_implementadora) %>% 
+  summarise(total = sum(beneficiarios)) %>% 
+  arrange(desc(total))
+
+# vector for ordering of x-axis (partners)
+ord_soc <- c("UNICEF", "SOCIO 1", "SOCIO 2", "SOCIO 4", "SOCIO 5", "SOCIO 7", "SOCIO 8",
+             "SOCIO 3", "SOCIO 10", "SOCIO 6")
+
+# creating the plot
+soc_stack <- act_ben2 %>% 
+  group_by(actividad_short, organizacion_implementadora) %>% 
+  summarise(beneficiarios = round(sum(beneficiarios))) %>%
+  ggplot(aes(x = organizacion_implementadora, 
+             y = beneficiarios)) +
+  geom_col(aes(fill = actividad_short)) +
+  scale_y_continuous(labels = unit_format(unit = "K", scale = 1e-3, sep = ""), 
+                     limits = c(0, 400000)) +
+  xlab("") + ylab("Beneficiarios") + 
+  theme(axis.text.x = element_text(angle = 45, hjust = 1),
+        legend.key.size = unit(0.1, "cm"),
+        legend.position = "bottom",
+        legend.text = element_text(size = 6),
+        legend.title = element_text(size = 8)) +
+  scale_fill_discrete(name = "Actividad") +
+  geom_text(data = stack_text, aes(y = total + 6000, label = scales::comma(total)), 
+            size = 3) +
+  scale_x_discrete(limits = ord_soc)
+
+ggplotly(soc_stack, tooltip = c("x", "fill", "y")) %>% 
+  layout(legend = list(title = list(text = "<b> organizacion <b>"))) %>% 
+  config(displayModeBar = FALSE) %>% 
+  layout(showlegend = TRUE, legend = list(font = list(size = 6)))
+
+```
+
+&nbsp;
+
+### 5b. Number of activity types implemented by each partner
+
+```{r TABLE-partner-activity-count}
+# this includes CA1.05
+act_ben %>% 
+  mutate(organizacion_implementadora = 
+           str_replace_all(organizacion_implementadora, 
+                           "UNICEF - Fondo de las Naciones Unidas para la Infancia",
+                           "UNICEF")) %>% 
+  rename(partner = organizacion_implementadora) %>% 
+  group_by(partner) %>% 
+  summarise(act_types = n_distinct(actividad_codigo)) %>% 
+  arrange(desc(act_types)) %>% 
+  t() %>% 
+  pander()
+
+```
+
+&nbsp;
+
+### 5c. Partners' progress over time
+*mouse over for details*
+
+```{r line-PLOTLY-partners-progress, fig.width=9}
+
+soc_line <- act_ben2 %>% 
+  mutate(mes_solo = as.Date(mes_solo)) %>% 
+  group_by(organizacion_implementadora, mes_solo) %>% 
+  summarise(cumulative = round(sum(beneficiarios))) %>% 
+  mutate(cumulative = cumsum(cumulative)) %>% 
+  ggplot(aes(x = mes_solo, y = cumulative, colour = organizacion_implementadora)) +
+  geom_line() +
+  geom_point(size = 0.7) +
+  scale_x_date(date_labels = "%b-%Y", date_breaks = "1 month") +
+  scale_y_continuous(labels = unit_format(unit = "K", scale = 1e-3, sep = ""), 
+                     limits = c(0, 410000)) +
+  xlab("") + ylab("Beneficiarios") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1),
+        legend.position = "bottom",
+        legend.text = element_text(size = 6),
+        legend.title = element_text(size = 8))
+
+ggplotly(soc_line, tooltip = c("x", "y", "colour")) %>% 
+  layout(legend = list(title = list(text = "<b> organizacion <b>"))) %>% 
+  config(displayModeBar = FALSE)
+  
+```
+
+&nbsp;
+
+### 5d. Summary table of partners' achievements
+
+```{r TABLE-partners-summary}
+act_ben2 %>% 
+  mutate(sex_ben = ifelse(str_detect(desagregacion, "^m"), "male",
+                          ifelse(str_detect(desagregacion, "^f"), "female", "no_esp"))) %>% 
+  mutate(actividad = actividad_desc) %>% 
+  group_by(organizacion_implementadora) %>% 
+  summarise(male = sum((beneficiarios[sex_ben == "male"])),
+            female = sum((beneficiarios[sex_ben == "female"])),
+            sex_ratio = round((male/female), digits = 2),
+            beneficiarios = sum(beneficiarios, na.rm = TRUE)) %>% 
+  mutate(percent_of_total = round((beneficiarios / sum(beneficiarios) * 100), digits = 2)) %>% 
+  left_join(act_ben %>% 
+              mutate(organizacion_implementadora = 
+              str_replace_all(organizacion_implementadora, 
+                           "UNICEF - Fondo de las Naciones Unidas para la Infancia",
+                           "UNICEF")) %>% 
+              group_by(organizacion_implementadora) %>% 
+              summarise(municipalities = n_distinct(pcode2)), 
+     by = "organizacion_implementadora") %>% 
+  relocate(beneficiarios, .after = organizacion_implementadora) %>% 
+  relocate(percent_of_total, .after = beneficiarios) %>% 
+  arrange(desc(beneficiarios)) %>% 
+  pander(big.mark = ",", style = "rmarkdown")
+```
+
+&nbsp;
+
+## 6. Maps and reference table
+
+&nbsp;
+
+### 6a. Maps at municipal level
+
+```{r MAPS-mun-reached-and-percent-reached}
+
+# reading in shapefile
+# quiet = TRUE is very important here
+pcode2_shape <- st_read("C:/Users/Sean Ng/Documents/R/5W/vnz_adm2_shapefiles/ven_admbnda_adm2_20180502.shp", quiet = TRUE) %>% 
+  rename(pcode1 = ADM1_PCODE,
+         pcode2 = ADM2_PCODE)
+
+# I think plotly's selector tool is not very good. or maybe the centroids
+# of the ven_admbnda dataset is not very good, at least when it comes to centroids. 
+
+# plot for beneficiaries reached by pcode2
+mun_ben_plot <- all_mun %>% 
+  right_join(pcode2_shape) %>% 
+  st_as_sf() %>% 
+  ggplot(aes(fill = beneficiarios)) +
+  geom_sf(size = 0.01) +
+  theme_void() +
+  ggtitle("Number of beneficiaries reached by municipality") +
+  scale_fill_gradient(trans = trans_reverser("log"), breaks = c(0, 100, 1000, 10000, 80482),
+                      labels = comma, na.value = "gray90") +
+  theme(legend.key.size = unit(0.3, "cm"),
+        legend.position = c(0.9, 0.1),
+        legend.title = element_blank(),
+        plot.title = element_text(size = 12))
+
+# map of percent of enrolled chidren covered by pcode2
+mun_percent_plot <- all_mun %>% 
+  right_join(pcode2_shape) %>% 
+  st_as_sf() %>%
+  ggplot(aes(fill = coverage_percent))+
+  geom_sf(size = 0.01) +
+  theme_void() +
+  ggtitle("Percent of enrolled children (3-17) reached by municipality") +
+  scale_fill_gradient(labels = comma, trans = "reverse", na.value = "gray90")+
+  theme(legend.key.size = unit(0.3, "cm"),
+        legend.position = c(0.9, 0.1),
+        legend.title = element_blank(), 
+        plot.title = element_text(size = 12))
+
+# using patchwork to put them side by side 
+mun_ben_plot + mun_percent_plot + plot_layout(ncol = 2)
+```
+
+&nbsp;
+
+### 6b. Reference table - municipal level
+
+__use `UNICEF_present` to filter to municipalities where the Education programme operates__
+
+*CA01.05 Promocion de mensajes claves para la comunidad escolar is not included*
+
+```{r DT-datatable}
+
+# it shows 335, shouldn't there be 336? I bet it's Vargas again
+all_mun %>% 
+  mutate(UNICEF_present = ifelse(is.na(beneficiarios), FALSE, TRUE)) %>% 
+  rename(no_of_activities = act_types) %>% # I feel like you should have done this earlier
+  left_join(cen_ref %>% # additional census variables
+      group_by(pcode2) %>% 
+      summarise(poor_persons = round(sum(ham_2019_xx_poblacion_pobre_por_parroquia)),
+                total_pop    = sum(x_2019_poblacion_parroquial_total)) %>% 
+      mutate(poverty_incidence = round(poor_persons / total_pop * 100))) %>% 
+  select(!pcode2) %>%
+  relocate(UNICEF_present) %>% 
+  relocate(poverty_incidence, .after = coverage_percent) %>% 
+  relocate(no_of_activities, .after = poverty_incidence) %>%
+  datatable(filter = "top", options = list(pageLength = 10, scrollX = TRUE)) %>% 
+  DT::formatStyle(columns = colnames(.), fontSize = "12pt")
+  
+```
+

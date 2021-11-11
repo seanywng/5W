@@ -100,10 +100,11 @@ unique(act_ben[c("actividad_codigo", "actividad_desc")]) %>%
   arrange(actividad_codigo)
 
 # figure out a better way to find new rows
-locations1 <- act1 %>% 
+# I think an anti join works
+locations_add <- act1 %>% 
   select(estado, pcode1, municipio, pcode2, parroquia, pcode3, ubicacion) %>% 
   distinct() %>% 
-  left_join(locations, by = "ubicacion")
+  anti_join(locations, by = "ubicacion")
 
 # you don't really need this anymore
 locations <- read_excel("locations_20191111_1600.xlsx", sheet = "uniqueben") %>% 

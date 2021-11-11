@@ -265,7 +265,6 @@ write_csv(u_ben, filename_u_ben)
 
 > Please not that we can only assure that there no duplications within locations as specific locations might have been targetted by more than one activity. For geographic operations, please use `u_ben`.
 
-> In actuality, at least in this dataset, the difference between unique beneficiaries and non-recurrent beneficiaries is not so great -- it is only around 218,000 for more than 5,000,000 beneficiaires. 
 
 ```{r, Beneficiairies per activity}
 

@@ -61,7 +61,7 @@ CA105 <- act_ben %>% filter(actividad_codigo == "CA1.05")
 # creating datasets without CA1.05 and
 # for act_ben, recoding UNICEF and mutating short activity descriptions
 act_ben2 <- act_ben %>% 
-  filter(!str_detect(.$ubicacion, "^RADIO")) %>% 
+  filter(actividad_codigo != "CA1.05") %>% 
   mutate(organizacion_implementadora = 
            str_replace_all(organizacion_implementadora, 
                            "UNICEF - Fondo de las Naciones Unidas para la Infancia",
@@ -155,7 +155,7 @@ ggplot(data = age_u_ben, aes(x = fct_reorder(age_ben, ordvec), y = beneficiarios
 
 &nbsp;
 
-## Beneficiaries by age compared to 2017 Enrollment
+## Beneficiaries by age compared to 2017 Enrolment
 
 ```{r REF matric ben }
 matric_ben <- cen_ref %>% 
@@ -447,7 +447,6 @@ ggplotly(soc_stack, tooltip = c("x", "fill", "y")) %>%
   config(displayModeBar = FALSE) %>% 
   layout(showlegend = TRUE, legend = list(font = list(size = 6)))
 
-
 ```
 
 &nbsp;
@@ -562,7 +561,6 @@ mun_ben_plot <- all_mun %>%
         legend.title = element_blank(),
         plot.title = element_text(size = 12))
 
-# fix this to compare schooling age population
 
 mun_percent_plot <- all_mun %>% 
   right_join(pcode2_shape) %>% 
