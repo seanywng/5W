@@ -1,0 +1,11 @@
+theme: jekyll-theme-minimal
+title: 5W 
+description: Data Analysis in Emergencies
+show_downloads: True
+navigation:
+  - title: Home
+    url: /
+  - title: setup
+    url: setup
+  - title: 5W
+    url: setup

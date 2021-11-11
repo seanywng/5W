@@ -142,15 +142,19 @@ act1$estatus_actividad <- act1$estatus_actividad %>%
                     "finalizada" = "finalizada",
                     "Finalizada" = "finalizada"))
 
-# checking, uncomment it if you need it
-# count(act2, recurrente_beneficiarios)
-# count(act2, act_covid)
-# count(act2, estatus_actividad)
 
 # create a new variable of last day of month only 
 act1$mes_solo <- ceiling_date(act1$mes_reportado, "month") - days(1)
 
 ```
+
+```{r checking-recode, eval=FALSE}
+# checking, uncomment it if you need it
+count(act2, recurrente_beneficiarios)
+count(act2, act_covid)
+count(act2, estatus_actividad)
+```
+
 
 > Cleaning locations -- you need to match to the locations dataset. You'll do this later since you don't have an updated locations file. 
 

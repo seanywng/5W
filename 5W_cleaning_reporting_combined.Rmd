@@ -48,7 +48,7 @@ panderOptions("big.mark", ",")
 
 &nbsp;
 
-> This first section details an example of the code necessary for cleaning a 5W dataset in R. 5W data is typically messy and in wide format. Additionally, data wrangling is time consuming and an inefficient use of a specialist's time. The code presented below intends to demonstrate that this monthly (or more frequent) occurence can be greatly automated, allowing for more timely and accurate analysis as well as creating the space for more tailored reporting.  
+> This first section details an example of the code necessary for cleaning a 5W dataset in R. 5W data is typically messy and in wide format. Additionally, data wrangling is time consuming and an inefficient use of a specialist's time. The code presented below intends to demonstrate that this monthly (or sometimes more frequent) occurence can be greatly automated, allowing for more timely and accurate analysis as well as creating the space for more tailored reporting.  
 
 &nbsp;
 
@@ -79,11 +79,8 @@ act1<- read_excel("database activities 5W.xlsx",
   slice(-c(12055)) # removes the grand total
 
 ```
-&nbsp;
 
-## 2. String Manipulation and Recoding 
-
-### 2a. Renaming Columns 
+### 1a. Renaming Columns 
 
 > Instead of showing a long vector of column names, here is a `glimpse()` of the renamed dataset: 
 
@@ -138,7 +135,11 @@ names(act1) <- act_names
 glimpse(act1)
 ```
 
-### 2b. Removing accents and standardising case
+&nbsp;
+
+## 2. String Manipulation and Recoding 
+
+### 2a. Removing accents and standardising case
 
 ```{r remove-accents, echo=TRUE}
 # function to remove accents
@@ -156,7 +157,7 @@ act1 <- act1 %>%
 
 ```
 
-### 2c. Recoding erroneous data
+### 2b. Recoding erroneous data
 
 > And mutating a new date column just with the month
 
@@ -202,8 +203,10 @@ locations <- read_csv("locations.csv") %>%
 
 ```{r, locations-check, echo=TRUE}
 # see if you need to update locations 
+# new locations not in locations.csv will be caught by the anti-join()
  locations_add <- act1 %>% 
-   select(estado, pcode1, municipio, pcode2, parroquia, pcode3, ubicacion) %>% 
+   select(estado, pcode1, municipio, pcode2, parroquia, pcode3, ubicacion,
+          latitud, longitud) %>% 
    distinct() %>% 
    anti_join(locations, by = "ubicacion")
 ```
