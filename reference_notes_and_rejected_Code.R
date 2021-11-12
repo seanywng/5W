@@ -2,6 +2,8 @@
 # ultimately, act_test2 was selected as it actually did what it was supposed to do
 # code is preserved here for reference
 
+"`r format(Sys.Date(), format='%d %B, %Y')`"
+
 act_test <- act2[0:100,]
 
 act_test %>% 
@@ -232,3 +234,14 @@ unique(act_ben2[c("actividad_short", "actividad_desc")]) %>%
 
 # for mapping pcodes to latlong
 geom_sf(data = st_transform(fsc3, 32614)) + # you need to remember this
+
+  
+# I think it's just better to have percentage of total below the beneficiaries reached, 
+# but I'm lazy now
+# REF-for-state-text
+mira_dc <- u_ben2 %>% filter(estado == "MIRANDA" | 
+                               estado == "DISTRITO CAPITAL")
+
+Beneficiaries in Miranda and Distrito Capital account for  
+__`r round((sum(mira_dc$beneficiarios)) / (sum(u_ben2$beneficiarios)) * 100)`%__ of the total of 
+__`r format(round(sum(u_ben2$beneficiarios)), big.mark = ",")`__. 

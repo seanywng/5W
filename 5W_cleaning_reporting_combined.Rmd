@@ -1,7 +1,7 @@
 ---
 title: "Cleaning and Reporting on Education 5W data from Venezuela"
 author: "Sean Ng"
-date: "`r format(Sys.Date(), format='%d %B, %Y')`"
+date: "12 November, 2021"
 output:
   html_document:
     toc: true
@@ -46,7 +46,6 @@ panderOptions("big.mark", ",")
 
 ```
 
-&nbsp;
 
 > This first section details an example of the code necessary for cleaning a 5W dataset in R. 5W data is typically messy and in wide format. Additionally, data wrangling is time consuming and an inefficient use of a specialist's time. The code presented below intends to demonstrate that this monthly (or sometimes more frequent) occurence can be greatly automated, allowing for more timely and accurate analysis as well as creating the space for more tailored reporting.  
 
@@ -82,7 +81,7 @@ act1<- read_excel("database activities 5W.xlsx",
 
 ### 1a. Renaming Columns 
 
-> Instead of showing a long vector of column names, here is a `glimpse()` of the renamed dataset: 
+> A `glimpse()` of the renamed dataset:
 
 ```{r}
 act_names <- c("fecha_reportado_cluster",
@@ -141,6 +140,8 @@ glimpse(act1)
 
 ### 2a. Removing accents and standardising case
 
+> Whilst it is true when some people say that if you remove tildes and other diacritical marks, it it no longer becomes Spanish. However, it must be said that implementing partners don't care and have included a wide variety of spellings. I would say that remove all accent marks is necessary to continue working with the dataset. 
+
 ```{r remove-accents, echo=TRUE}
 # function to remove accents
 rm_accent <- function(colns){
@@ -148,8 +149,9 @@ rm_accent <- function(colns){
 }
 
 # removing accents
+# and str_to_upper() since R is case-sensitive
 act1 <- act1 %>% 
-  mutate(estado    = rm_accent(str_to_upper(estado)), # string to upper and rm_accent
+  mutate(estado    = rm_accent(str_to_upper(estado)), 
          municipio = rm_accent(str_to_upper(municipio)),
          parroquia = rm_accent(str_to_upper(parroquia)),
          ubicacion = rm_accent(str_to_upper(ubicacion)),
@@ -159,7 +161,7 @@ act1 <- act1 %>%
 
 ### 2b. Recoding erroneous data
 
-> And mutating a new date column just with the month
+> These should just be dropdown menus; partners should also be informed that blanks will be treated as FALSE. Additionally, a new date column just with the month is mutated, as the `mes_reportado` column has some months with multiple reporting dates. 
 
 ```{r recoding, echo=TRUE}
 # recoding 
@@ -191,15 +193,17 @@ act1$mes_solo <- ceiling_date(act1$mes_reportado, "month") - days(1)
 
 ### 3a. Read in `locations.csv`
 
-> And check if you need to update it
+> And check if you need to update it. 
 
 ```{r read-locations, echo=TRUE}
 locations <- read_csv("locations.csv") %>%
-  mutate(estado    = rm_accent(str_to_upper(estado)),
+  mutate(estado    = rm_accent(str_to_upper(estado)), # just to make sure 
          municipio = rm_accent(str_to_upper(municipio)),
          parroquia = rm_accent(str_to_upper(parroquia)),
          ubicacion = rm_accent(str_to_upper(ubicacion)))
 ```
+
+> Maybe we should add new pcodes for "todo municipio" and  "todo estado"; will they be abused?
 
 ```{r, locations-check, echo=TRUE}
 # see if you need to update locations 
@@ -213,9 +217,6 @@ locations <- read_csv("locations.csv") %>%
 
 
 ### 3b. Splitting the dataset into clean and dirty
-> This section reads in the locations reference dataset then uses it to clean `adm_dirty` and rewrites it to `adm_dirty1`. The `distinct()` call at the end is to ensure that no duplicates are included as the `left_join()` argument will product duplicates. After which, `adm_clean` and `adm_dirty1` are combined into `act2`. 
-
-> As a note, there is a to include a set of new pcodes -- "todo municipio" and  "todo estado". 
 
 ```{r split-clean-dirty, echo=TRUE}
 # splitting into two datasets, one clean one dirty. 
@@ -232,6 +233,8 @@ adm_clean <- act1 %>%
 ```
 
 ### 3c. Fill in missing values with `coalesce()`
+
+> The locations reference dataset is used to clean `adm_dirty` and rewrite it. The `distinct()` call at the end is to ensure that no duplicates are included as the `left_join()` argument will produce duplicates (still not sure how to control this). After which, `adm_clean` and `adm_dirty` are combined into `act2`.
 
 ```{r fill in missing values, echo=TRUE}
 # filling in missing values
@@ -268,7 +271,7 @@ nrow(act2)
 &nbsp;
 
 ## 4. Beneficiary disaggregation 
-> This is to check that `total_beneficiarios` is equal to the sum of all disaggregated columns. First, we mutate a new column by summing all the disaggregated beneficiaries and calling it `total_ben_check`. The next function prints the differences between `total_ben_check` and `total_beneficiarios`. Finally, we mutate a new column in the dataset called `no_esp_ben` or beneficiarios no especificados to collect the differences and ensure that we do not lose them. 
+> This is to check that `total_beneficiarios` is equal to the sum of all disaggregated columns. First, we mutate a new column by summing all the disaggregated beneficiaries and calling it `total_ben_check`. Then, we mutate a new column in thr dataset called `no_esp_ben` or beneficiarios no especificados so that we maintain the un-disaggregated beneficiaries without polluting the rest of the dataset.
 
 ```{r bencheck-and-no-esp-ben, echo=TRUE }
 # mutating bencheck and unspecified beneficiaries columns 
@@ -278,7 +281,7 @@ act2 <- act2 %>%
 
 ```
 
-> Next, we print rows where the sum of disaggregated beneficiaries do not match the totals reported in the `total_beneficiarios` column. 
+> Next, we print rows where the sum of disaggregated beneficiaries (`total_ben_check`) do not match the totals reported in the `total_beneficiarios` column so that we can return to the relevant parties for follow up. 
 
 ```{r printing-bencheck}
 # printing the bencheck
@@ -314,13 +317,12 @@ write_csv(act2, filename_wide)
 
 ### 5b. Unique beneficiaries
 
-> This section pivots the dataset longer into tidy data which, with one observation per instance of age and sex; this is necessary for easy plotting and additional operations. Additionally, rows with no beneficiaries are filtered out. 
+> This section pivots the dataset longer into tidy data, with one observation per instance of age and sex; this is necessary for easy plotting and analysis. Additionally, rows with no beneficiaries are filtered out. 
 
-> The dataset `u_ben` is created by taking the highest number of beneficiaries by age and sex group by location. The columns are then filtered down to create a more usable dataset. We will use this dataset for any operations related to unique beneficiaries (individuals), including comparisons with census data to determine reach and coverage. Please note that not all activities will be represented in this dataset as only the max of beneficiaries per disaggregation group per location was selected. 
+> The dataset `u_ben` is created by taking the highest number of beneficiaries by age and sex group by location of all non-recurrent beneficiaries. The columns are then filtered down to create a more usable dataset. We will use this dataset for any operations related to unique beneficiaries (individuals), including comparisons with census data to determine reach and coverage as well as geographic analysis. We drop activity information from this dataset as it only contains the max of per disaggregation group per location anyway. 
 
 ```{r unique-benficiaries, echo=TRUE}
 # pivoting longer and creating new dataframe
-  
 u_ben <- act2 %>% 
   select(-t_f_ben, -total_ben_check) %>% # remember to drop them
   relocate(mes_solo) %>% # moves mes_solo to the first variable
@@ -346,9 +348,9 @@ write_csv(u_ben, filename_u_ben)
 
 ### 5c. Beneficiaries by activity
 
-> The dataset `act_ben` is for activity totals. Only the rows marked as `recurrente_beneficiarios == FALSE` have been selected. The first instance of recurring beneficiaires is marked FALSE, with all subsequent entries being marked TRUE. Similar to `u_ben`, it has also been pivoted longer into tidy data. 
+> The dataset `act_ben` is for activity-wise analysis. Only the rows marked as `recurrente_beneficiarios == FALSE` have been selected. The first instance of recurring beneficiaires is marked FALSE, with all subsequent entries being marked TRUE. Similar to `u_ben`, it has also been pivoted longer into tidy data. 
 
-> Please not that we can only assure that there no duplications within locations as specific locations might have been targetted by more than one activity. For geographic operations, please use `u_ben`.
+> Please not that there is double counting in this dataset as specific beneficiaries might been reached by more than one activity. For geographic analysis, please use `u_ben`.
 
 ```{r beneficiaries-by-activity, echo=TRUE}
 # This is the dataset for beneficiaries
@@ -378,11 +380,13 @@ write_csv(act_ben, filename_act_ben)
 
 ### 5d. Comparing `u_ben`, `act_ben` and difference
 
+> Please note that this still has that radio messaging activity lumped in with the totals. 
+
 ```{r comparing}
 
-(sum(u_ben$beneficiarios))
-(sum(act_ben$beneficiarios))
-(sum(act_ben$beneficiarios) - sum(u_ben$beneficiarios))
+(format(sum(u_ben$beneficiarios), big.mark = ","))
+(format(sum(act_ben$beneficiarios), big.mark = ","))
+(format(sum(act_ben$beneficiarios) - sum(u_ben$beneficiarios), big.mark = ","))
 ```
 
 &nbsp;
@@ -431,7 +435,7 @@ u_ben2 <- u_ben %>% filter(!str_detect(.$ubicacion, "^RADIO"))
 
 &nbsp;
 
-> This is an entirely automated report -- all charts and tables, as well as all figures within the report have been generated from the data, with no manual input. This report makes use of the outputs of the `5W_cleaning` section above. This set of 5W data pertains to the Education Cluster in Venezuela and has had partner information removed. Code will not be shown in this section.  
+> This is an entirely automated report -- all charts and tables, as well as all figures within the report have been generated from the data, with no manual input. This report makes use of the outputs of the `5W_cleaning` section above. This set of 5W data pertains to the Education Cluster in Venezuela and has had partner information removed. Code will not be shown in this section -- you can download the Rmd at the top-left corner of this doucument.  
 
 &nbsp;
 
@@ -922,7 +926,7 @@ mun_ben_plot + mun_percent_plot + plot_layout(ncol = 2)
 
 &nbsp;
 
-### 6b. Reference table - municipal level
+### 6b. Reference table -- municipal level
 
 __use `UNICEF_present` to filter to municipalities where the Education programme operates__
 
