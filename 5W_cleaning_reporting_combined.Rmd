@@ -262,10 +262,10 @@ act2 <- bind_rows(adm_clean, adm_dirty)
 
 ```{r join-error-check}
 # error checking
-sum(act1$total_beneficiarios, na.rm = TRUE)
-sum(act2$total_beneficiarios, na.rm = TRUE)
-nrow(act1)
-nrow(act2)
+rbind(sum(act1$total_beneficiarios, na.rm = TRUE),
+      sum(act2$total_beneficiarios, na.rm = TRUE),
+      nrow(act1),
+      nrow(act2))
 ```
 
 &nbsp;
@@ -384,9 +384,9 @@ write_csv(act_ben, filename_act_ben)
 
 ```{r comparing}
 
-(format(sum(u_ben$beneficiarios), big.mark = ","))
-(format(sum(act_ben$beneficiarios), big.mark = ","))
-(format(sum(act_ben$beneficiarios) - sum(u_ben$beneficiarios), big.mark = ","))
+rbind(sum(u_ben$beneficiarios),
+      sum(act_ben$beneficiarios),
+      sum(u_ben$beneficiarios) - sum(act_ben$beneficiarios))
 ```
 
 &nbsp;
