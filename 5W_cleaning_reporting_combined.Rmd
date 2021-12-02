@@ -47,7 +47,7 @@ panderOptions("big.mark", ",")
 ```
 
 
-> This first section details an example of the code necessary for cleaning a 5W dataset in R. 5W data is typically messy and in wide format. Additionally, data wrangling is time consuming and an inefficient use of a specialist's time. The code presented below intends to demonstrate that this monthly (or sometimes more frequent) occurence can be greatly automated, allowing for more timely and accurate analysis as well as creating the space for more tailored reporting.  
+> This first section details an example of the code necessary for cleaning a 5W dataset in R. 5W data is typically messy and in wide format. Additionally, data wrangling is time consuming and an inefficient use of a specialist's time. The code presented below intends to demonstrate that this monthly (or sometimes more frequent) occurence can be greatly automated, allowing for more timely and accurate analysis as well as creating the space for more tailored reporting. The text in this first section is mostly observations about the dataset. 
 
 &nbsp;
 
@@ -140,7 +140,7 @@ glimpse(act1)
 
 ### 2a. Removing accents and standardising case
 
-> Whilst it is true when some people say that if you remove tildes and other diacritical marks, it it no longer becomes Spanish. However, it must be said that implementing partners don't care and have included a wide variety of spellings. I would say that remove all accent marks is necessary to continue working with the dataset. 
+> Whilst it is true that if you remove tildes and other diacritical marks, it is no longer proper Spanish, removing all accent marks is necessary to continue working with the dataset. It also must be said that implementing partners don't pay attention to this either and have included a wide variety of spellings. 
 
 ```{r remove-accents, echo=TRUE}
 # function to remove accents
@@ -435,7 +435,7 @@ u_ben2 <- u_ben %>% filter(!str_detect(.$ubicacion, "^RADIO"))
 
 &nbsp;
 
-> This is an entirely automated report -- all charts and tables, as well as all figures within the report have been generated from the data, with no manual input. This report makes use of the outputs of the `5W_cleaning` section above. This set of 5W data pertains to the Education Cluster in Venezuela and has had partner information removed. Code will not be shown in this section -- you can download the Rmd at the top-left corner of this doucument.  
+> This is an entirely automated report -- all charts and tables, as well as all figures within the report have been generated from the data, with no manual input. This report makes use of the outputs of the `5W_cleaning` section above. This set of 5W data pertains to the Education Cluster in Venezuela and has had partner information removed. Code will not be shown in this section -- you can still download the Rmd at the top-left corner of this page.  
 
 &nbsp;
 
@@ -491,7 +491,7 @@ ggplot(data = age_u_ben, aes(x = fct_reorder(age_ben, ordvec), y = beneficiarios
   geom_col(fill = "cornflowerblue") +
   geom_text(aes(label = scales::comma(beneficiarios)), vjust = -0.25, size = 4) +
   scale_y_continuous(labels = unit_format(unit = "K", scale = 1e-3, sep = "")) +
-  xlab("Grupos por Edad") + ylab("Beneficiarios") +
+  xlab("Age groups") + ylab("Beneficiaries") +
   theme(axis.text = element_text(size = 10))
 
 ```
@@ -511,11 +511,12 @@ matric_ben <- cen_ref %>%
   pivot_longer(everything(), names_to = "age_ben", values_to = "matricula2017", 
                values_drop_na = TRUE) %>% 
   group_by(age_ben) %>% 
-  summarise(matricula2017 = sum(matricula2017)) %>%
+  summarise(enrolment2017 = sum(matricula2017)) %>%
   left_join(age_u_ben) %>% 
-  mutate(percent_total = beneficiarios/matricula2017 * 100) %>% 
+  mutate(percent_total = beneficiarios/enrolment2017 * 100) %>% 
   relocate(beneficiarios, .after = age_ben) %>% 
-  rename(`Edad grupo` = age_ben) %>% 
+  rename(`Age group` = age_ben,
+         beneficiaries = beneficiarios) %>% 
   slice(2,3,1)  # rearranging rows
   
 ```
@@ -563,7 +564,7 @@ u_ben2 %>%
   scale_x_date(date_labels = "%b-%Y", date_breaks = "1 month") +
   scale_y_continuous(labels = scales::unit_format(unit = "K", scale = 1e-3, sep = ""),
                      breaks = seq(0,950000, by = 200000)) + # what is this breaks doing?
-  xlab("Mes Reportado") + ylab("Beneficiarios (cumulativo)")
+  xlab("Month reported") + ylab("Beneficiaries (cumulative)")
 ```
 
 &nbsp;
@@ -584,7 +585,7 @@ act_lines <- act_ben2 %>%
   scale_x_date(date_labels = "%b-%Y", date_breaks = "1 month") +
   scale_y_continuous(labels = unit_format(unit = "K", scale = 1e-3, sep = ""), 
                      limits = c(0, 500000)) +
-  xlab("") + ylab("Beneficiarios") +
+  xlab("") + ylab("Beneficiaries") +
   scale_colour_discrete(name = "Actividad") +
   theme(axis.text.x = element_text(angle = 45, hjust = 1),
         legend.position = "bottom",
@@ -615,7 +616,7 @@ u_ben2 %>%
             vjust = -0.25, hjust = 0.05, size = 3, angle = 30) +
   scale_y_continuous(labels = unit_format(unit = "K", scale = 1e-3, sep = ""), 
                      limits = c(0, 200000)) +
-  xlab("") + ylab("Beneficiarios") + 
+  xlab("") + ylab("Beneficiaries") + 
   theme(axis.text.x = element_text(angle = 45, hjust = 1))
 ```
 
@@ -637,7 +638,7 @@ u_ben2 %>%
   ggplot(aes(x = fct_reorder(estado, ubicacion, .desc = TRUE), y = ubicacion)) +
   geom_col(fill = "cornflowerblue") +
   geom_text(aes(label = round(ubicacion)), vjust = -0.25, size = 3) + 
-  xlab("") + ylab("Numero de Escuelas") +
+  xlab("") + ylab("Number of schools") +
   theme(axis.text.x = element_text(angle = 45, hjust = 1))
 
 ```
@@ -691,7 +692,7 @@ all_mun_points <- all_mun %>%
   scale_colour_gradient(low = "azure4", high = "darkblue") + #find a better colour?
   scale_y_continuous(trans = "log10", 
                      labels = comma) +
-  xlab("") + ylab("Beneficiarios Alcanzados por Municipio") +
+  xlab("") + ylab("Beneficiaries reached by municipality") +
   theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
   theme(legend.position = "none") 
 
@@ -775,7 +776,7 @@ soc_stack <- act_ben2 %>%
   geom_col(aes(fill = actividad_short)) +
   scale_y_continuous(labels = unit_format(unit = "K", scale = 1e-3, sep = ""), 
                      limits = c(0, 400000)) +
-  xlab("") + ylab("Beneficiarios") + 
+  xlab("") + ylab("Beneficiaries") + 
   theme(axis.text.x = element_text(angle = 45, hjust = 1),
         legend.key.size = unit(0.1, "cm"),
         legend.position = "bottom",
@@ -831,7 +832,7 @@ soc_line <- act_ben2 %>%
   scale_x_date(date_labels = "%b-%Y", date_breaks = "1 month") +
   scale_y_continuous(labels = unit_format(unit = "K", scale = 1e-3, sep = ""), 
                      limits = c(0, 410000)) +
-  xlab("") + ylab("Beneficiarios") +
+  xlab("") + ylab("Beneficiaries") +
   theme(axis.text.x = element_text(angle = 45, hjust = 1),
         legend.position = "bottom",
         legend.text = element_text(size = 6),
@@ -888,8 +889,7 @@ pcode2_shape <- st_read("C:/Users/Sean Ng/Documents/R/5W/vnz_adm2_shapefiles/ven
   rename(pcode1 = ADM1_PCODE,
          pcode2 = ADM2_PCODE)
 
-# I think plotly's selector tool is not very good. or maybe the centroids
-# of the ven_admbnda dataset is not very good, at least when it comes to centroids. 
+# I think plotly's selector tool is not very good -- so no interactive map
 
 # plot for beneficiaries reached by pcode2
 mun_ben_plot <- all_mun %>% 
