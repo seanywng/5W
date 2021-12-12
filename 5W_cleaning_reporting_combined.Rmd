@@ -521,11 +521,12 @@ matric_ben <- cen_ref %>%
   
 ```
 
-> With reference to the 2017 Matricula dataset, we can see that the Education programme has reached an overall average of __`r round(sum(matric_ben$beneficiaries)/(sum(matric_ben$enrolment2017))*100)`%__ of schoolgoing children aged 3-17 nationwide. Children aged 3-17 consitute __`r round(sum(matric_ben$beneficiarios)/(sum(u_ben2$beneficiarios))*100)`%__ of all UNICEF beneficiaries. 
+> With reference to the 2017 Matricula dataset, we can see that the Education programme has reached an overall average of __`r round(sum(matric_ben$beneficiaries)/(sum(matric_ben$enrolment2017))*100)`%__ of schoolgoing children aged 3-17 nationwide. Children aged 3-17 consitute __`r round(sum(matric_ben$beneficiaries)/(sum(u_ben2$beneficiarios))*100)`%__ of all UNICEF beneficiaries. 
 
 
 ```{r TABLE-matric-ben}
 pander(matric_ben, big.mark = ",", style = "rmarkdown")
+
 ```
 
 &nbsp;
