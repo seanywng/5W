@@ -435,7 +435,7 @@ u_ben2 <- u_ben %>% filter(!str_detect(.$ubicacion, "^RADIO"))
 
 &nbsp;
 
-> This is an entirely automated report -- all charts and tables, as well as all figures within the report have been generated from the data, with no manual input. This report makes use of the outputs of the `5W_cleaning` section above. This set of 5W data pertains to the Education Cluster in Venezuela and has had partner information (except that of UNICEF) removed. This is a generic 5W report, intended for and external audiences and senior manageemnt; a more detailed analysis of coverage and gaps can be found [here](https://seanywng.github.io/coverage_gaps_venezuela/). Code will not be shown in this section -- you can still download the Rmd at the top-left corner of this page.
+> This is an entirely automated report -- all charts and tables, as well as all figures within the report have been generated from the data, with no manual input. This report makes use of the outputs of the `5W_cleaning` section above. This set of 5W data pertains to the Education Cluster in Venezuela and has had partner information (except that of UNICEF) removed. This is a generic 5W report, intended for and external audiences and senior management; a more detailed analysis of coverage and gaps can be found [here](https://seanywng.github.io/coverage_gaps_venezuela/). Code will not be shown in this section -- you can still download the Rmd at the top-left corner of this page.
 
 &nbsp;
 
@@ -887,7 +887,7 @@ act_ben2 %>%
 
 # reading in shapefile
 # quiet = TRUE is very important here
-pcode2_shape <- st_read("C:/Users/Sean Ng/Documents/R/5W/vnz_adm2_shapefiles/ven_admbnda_adm2_20180502.shp", quiet = TRUE) %>% 
+pcode2_shape <- st_read("C:/Users/seany/Downloads/R/5W/vnz_adm2_shapefiles/ven_admbnda_adm2_20180502.shp", quiet = TRUE) %>% 
   rename(pcode1 = ADM1_PCODE,
          pcode2 = ADM2_PCODE)
 
