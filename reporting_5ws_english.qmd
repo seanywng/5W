@@ -741,7 +741,7 @@ Here we generate two maps for a side-by-side plot. The first showing the scale o
 
 <br>
 
-```{r MAPS-mun-reached-and-percent-reached, echo=TRUE, fig.height=7}
+```{r MAPS-mun-reached-and-percent-reached, echo=TRUE, fig.height=7, fig.width=11}
 
 # reading in shapefile
 # quiet = TRUE is very important here
