@@ -1,0 +1,638 @@
+---
+title: "Cleaning Education 5W data from Venezuela"
+author: "Sean Ng"
+date: "12 January 2024"
+subtitle: "Updated 7 May 2024"
+toc: true
+toc-location: left
+toc-depth: 4
+format: 
+  html:
+    page-layout: full
+    code-tools: true
+---
+
+# A. Cleaning the 5W data
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, warning = FALSE, message = FALSE,
+                      fig.width = 9.5)
+library(tidyverse)
+library(lubridate)
+library(stringr)
+library(stringi)
+library(pander)
+library(scales)
+library(forcats)
+library(janitor)
+library(readxl)
+library(ggmap)
+library(sf)
+library(patchwork)
+library(ggforce)
+library(ggthemes)
+library(plotly)
+library(kableExtra)
+library(DT)
+library(tinytex)
+library(writexl)
+
+# tables all in one row
+panderOptions('table.split.table', Inf)
+
+# thousands separator
+panderOptions("big.mark", ",")
+
+theme_set(theme_light())
+
+# Disabling scientific notation
+options(scipen = 100)
+
+# This should just be a standard R function
+`%out%` <- Negate(`%in%`)
+
+
+```
+
+
+```{r eval=FALSE, echo = FALSE}
+# Splitting the database
+# Ignore this section
+db_raw <- read_excel("database activities 5W.xlsx", 
+                    sheet = "data", 
+                    skip = 1, 
+                    col_types = df_col_types)  |>
+  slice(-c(1))
+
+split(db_raw, db_raw$`Organización implementadora`)|> 
+ iwalk(~write_xlsx(.x, path = paste0("./data/", .y, ".xlsx")))
+```
+
+<br>
+
+## Introduction
+
+This page documents they typical cleaning process I would employ for programmatically handling data cleaning and reporting of 5W data in R. In this first section, we will be going through a sample cleaning script; the next section will deal with report generation. 
+
+We will be using data from the Education Cluster in Venezuela with partner names recoded. For another example of a cleaning script for 5Ws, please see [here](https://github.com/kenya-eie-wg/eie_wg_5ws/blob/main/5Ws_cleaning_script.Rmd).
+
+<br><br><br>
+
+## 1. Reading in the data
+
+As in typical, the data is in separate files, one from each partner and one for UNICEF itself, the cluster lead:  
+
+
+```{r}
+list.files("./data")
+```
+
+We start with a bit of organisation by setting the column types and names for the data that we are reading in. Even if we were working in Spanish, we would still need to clean up the column names as they can be overly long or can contain instructions. 
+
+
+```{r reading-in-xlsx, echo=TRUE}
+
+# specifying column types 
+df_col_types <- c("date", "date", "text", "text","text","text",
+                   "text","text","text","text","text","text","text",
+                   "numeric", "numeric", "text","text","text",
+                   "text","text","text", "numeric", "text", 
+                   "date", "date", "text",
+                   "numeric", "numeric", "numeric", "numeric",
+                   "numeric", "numeric", "numeric", "numeric",
+                   "numeric", "numeric", "numeric", "numeric",
+                   "numeric", "numeric", "numeric")
+
+df_names <- c("date_reported",
+               "month_reported",
+               "project_code",
+               "project_name",
+               "lead_organisation",
+               "implementing_partner",
+               "state",
+               "pcode1",
+               "municipality",
+               "pcode2",
+               "parrish",
+               "pcode3",
+               "location",
+               "latitude",
+               "longitude",
+               "activity_full",
+               "activity_code",
+               "activity_description",
+               "activity_code_descrption",
+               "activity_covid",
+               "unit",
+               "quantity_mensual",
+               "recurrent_beneficiaries",
+               "start_date",
+               "end_date",
+               "activity_status",
+               "total_beneficiaries",
+               "percent_indigenous",
+               "percent_pwd",
+               "m_0_3",
+               "m_3_6",
+               "m_7_12",
+               "m_12_17",
+               "m_18_19",
+               "f_0_3",
+               "f_3_6",
+               "f_7_12",
+               "f_12_17",
+               "f_18_19",
+               "f_19_and_older",
+               "m_19_and_older")
+
+```
+
+
+Now we will write a function to read in the data and then consolidate all the files. The loop at the end combines all the cleaned files together into one dataframe.  
+
+
+
+```{r warning = FALSE, echo=TRUE}
+
+# Function for reading in 5Ws files
+
+read_5ws <- function(file){
+  
+  read_excel(file, 
+             sheet = 1, 
+             col_types = df_col_types)|>
+    janitor::clean_names()|>
+    setNames(df_names) |> 
+    # Cleaning the date
+    mutate(month_reported = ceiling_date(month_reported, "month") - days(1))
+  
+  }
+
+## Path to 4Ws
+# This is the folder where the 4Ws from the current round are stored. 
+# Because we are using the `here` package, we can use the dot notation, 
+# which greatly aids reproducibility
+
+path_5ws <- "./data"
+
+# Change the folder to the correct one
+# The files will be read from here 
+file_list <- list.files(path = path_5ws, 
+                        recursive = TRUE, 
+                        pattern = "\\.xlsx$", 
+                        full.names = TRUE) 
+
+# Filtering out open files?
+file_list <- file_list[!str_detect(file_list, "\\~")]
+
+# For loop to work, let's initialise an empty data frame
+df_raw <- data.frame()
+
+# Loop
+for (i in 1:length(file_list)) {
+  df_raw_i <- read_5ws(file_list[i])
+  df_raw <- rbind(df_raw, df_raw_i)
+}
+
+
+```
+
+<br>
+
+Let us take a look at the consolidated file. From the output below, we can see that there are `r format(df_raw |> nrow(), big.mark = ",")` rows and `r format(df_raw |> ncol(), big.mark = ",")` columns in the dataset. The output below shows column names, column data types (in the angle brackets) and a preview of the data in each column. 
+
+
+```{r echo=TRUE}
+df_raw |> 
+  glimpse()
+```
+
+
+Setting the column types seems to have paid off well, especially since we do not seem to need to clean the date-time data. 
+
+<br><br>
+
+## 2. String Manipulation and Recoding 
+
+### 2a. Recoding erroneous data
+
+Errors are part of the 5W process, really any data entry process. However, R makes it easy to programmatically recode these errors. Below are some examples of the range of responses from the `recurrent_beneficiaries` column, which indicates whether beneficiaries have been reached before. 
+
+
+```{r recurrent-beneficiaries-table}
+df_raw$recurrent_beneficiaries |> 
+  table() |> 
+  pander(caption = "Recurrent beneficiaries responses")
+```
+
+We will recode these as yes/no. We will do do something similar for other columns, such as this one: 
+
+
+```{r activity-status-table}
+df_raw$activity_status |> table() |> pander(caption = "Activity status responses")
+```
+
+
+To resolve this, we will just recode the erroneous data and recode it. We have also cleaned out some of the `NAs` from the `recurrent_beneficiaries` and `acitivity_covid` columns: 
+
+
+```{r echo=TRUE, eval=FALSE}
+df_raw |> 
+  mutate(recurrent_beneficiaries = (recode(recurrent_beneficiaries, 
+            "no" = "no", "No" = "no", 
+            "Si" = "yes", "si" = "yes", "sí" = "yes", "Sí" = "yes")),  
+           activity_covid = recode(activity_covid, 
+            "no" = "no", "No" = "no", 
+            "Si" = "yes", "si" = "yes", "sí" = "yes", "Sí" = "yes")) |>
+  # recoding NAs
+  replace_na(list(recurrent_beneficiaries = "no", activity_covid = "no")) |>
+  mutate(activity_status = str_replace_all(activity_status, 
+                                           c("En ejecucion" = "ejecucion", 
+                                             "en ejecución" = "ejecucion",
+                                             "en Ejecución" = "ejecucion",
+                                             "En ejecución" = "ejecucion",
+                                             "En Ejecución" = "ejecucion",
+                                             "finalizada" = "finalizada",
+                                             "Finalizada" = "finalizada")))
+  
+
+```
+
+<br><br>
+
+### 2b. Removing accents and standardising case
+
+This dataset is from Venezuela and has numerous tildes and diacritical marks. However, their use amongst partners is not consistent. Although proper spelling in Spanish has diacritical marks, it is easiest to remove them all before working in code. Implementing partners also don't really pay attention to this either and typically have submissions with a wide variety of spellings, especially for place names; we will also clean out the activity descriptions.  
+
+
+Let us first make a simple function to remove diacritical marks and force 
+
+
+```{r remove-accents, echo=TRUE}
+# Function to remove accents
+# stri_trans_general is from `stringi` and is typically used in 
+# script-to-script conversions and transliterations 
+# https://www.rdocumentation.org/packages/stringi/versions/1.8.3/topics/stri_trans_general
+rm_accent <- function(x){
+  x <- stri_trans_general(x, "Latin-ASCII")
+}
+
+```
+
+```{r echo = TRUE, eval = FALSE}
+# removing accents
+# and str_to_lower() since R is case-sensitive
+df_raw %>% 
+  mutate(state    = rm_accent(str_to_lower(state)), 
+         municipality = rm_accent(str_to_lower(municipality)),
+         parrish = rm_accent(str_to_lower(parrish)),
+         location = rm_accent(str_to_lower(location)),
+         activity_description = rm_accent(str_to_lower(activity_description)))
+```
+
+
+<br><br>
+
+
+### 2c. One function for reading and cleaning
+
+We will now combine all this recoding into one function, organising our code better and improving readability. In dirtier datasets, sometimes partner names will need to be cleaned too (but that was done when this dataset was anonymised). To prevent data entry errors, we should just have been stricter about using dropdown tables. 
+
+In fact, let us put all these steps right before the reading and consolidation loop so that data is cleaned as it is read into the consolidated dataset. Let's first amend the reading function: 
+
+
+```{r reading-and-cleaning-function, echo=TRUE}
+
+# If you haven't run it yet
+rm_accent <- function(colns){
+  colns <- stri_trans_general(colns, "Latin-ASCII")
+}
+
+read_and_clean_5ws <- function(file){
+  
+  read_excel(file, 
+             sheet = 1, 
+             col_types = df_col_types)|>
+    janitor::clean_names()|>
+    setNames(df_names) |>
+    mutate(recurrent_beneficiaries = (recode(recurrent_beneficiaries, 
+            "no" = "no", "No" = "no", 
+            "Si" = "yes", "si" = "yes", "sí" = "yes", "Sí" = "yes")),  
+           activity_covid = recode(activity_covid, 
+            "no" = "no", "No" = "no", 
+            "Si" = "yes", "si" = "yes", "sí" = "yes", "Sí" = "yes")) |>
+    # recoding NAs
+    replace_na(list(recurrent_beneficiaries = "no", activity_covid = "no")) |>
+    mutate(activity_status = str_replace_all(activity_status, 
+                                             c("En ejecucion" = "ejecucion", 
+                                               "en ejecución" = "ejecucion",
+                                               "en Ejecución" = "ejecucion",
+                                               "En ejecución" = "ejecucion",
+                                               "En Ejecución" = "ejecucion",
+                                               "finalizada" = "finalizada",
+                                               "Finalizada" = "finalizada"))) |> 
+    mutate(state    = rm_accent(str_to_lower(state)), 
+           municipality = rm_accent(str_to_lower(municipality)),
+           parrish = rm_accent(str_to_lower(parrish)),
+           location = rm_accent(str_to_lower(location)),
+           activity_description = rm_accent(str_to_lower(activity_description))) |> 
+    # Cleaning the date
+    mutate(month_reported = ceiling_date(month_reported, "month") - days(1))
+  
+  }
+
+path_5ws <- "./data"
+
+# Change the folder to the correct one
+# The files will be read from here 
+file_list <- list.files(path = path_5ws, 
+                        recursive = TRUE, 
+                        pattern = "\\.xlsx$", 
+                        full.names = TRUE) 
+
+# Filtering out open files?
+file_list <- file_list[!str_detect(file_list, "\\~")]
+
+# Re-initialising the empty dataframe
+df_raw <- data.frame()
+
+# Let us repeat the loop, with the new reading and cleaning function
+for (i in 1:length(file_list)) {
+  df_raw_i <- read_and_clean_5ws(file_list[i])
+  df_raw <- rbind(df_raw, df_raw_i)
+}
+
+
+```
+
+
+<br><br>
+
+## 3. Cleaning locations 
+
+Now that we have a consolidated, semi-clean dataset, let us now clean geographic and location data. 
+
+We will first read in `locations.csv`. This file comes from the official gazette of administrative areas and is typically available on HDX. The `locations.csv` dataset also has schools and schools codes, in addition to state, municipality and parrish official names and pcodes, given that I was using it for the education cluster. 
+
+
+```{r read-locations, echo=TRUE}
+locations <- read_csv("locations.csv", show_col_types = FALSE) %>%
+  # Using the rm_accent() function from earlier
+  mutate(state  = rm_accent(str_to_lower(estado)), # just to make sure 
+         municipality = rm_accent(str_to_lower(municipio)),
+         parrish = rm_accent(str_to_lower(parroquia)),
+         location = rm_accent(str_to_lower(ubicacion))) |> 
+  select(-estado, -municipio, -parroquia, -ubicacion)
+```
+
+
+We will also use an anti-join to identify new project sites which we should add to the location database. We won't be doing this in this exercise, but updating the project site database is important for verification, monitoring and accountability to affected populations. 
+
+
+```{r, locations-check, echo=TRUE}
+# see if you need to update locations 
+# new locations not in locations.csv will be caught by the anti-join()
+ locations_add <- df_raw %>% 
+   select(state, pcode1, municipality, pcode2, parrish, pcode3, location,
+          latitude, longitude) %>% 
+   distinct() %>% 
+   anti_join(locations, by = "location")
+```
+
+<br><br>
+
+
+### 3b. Splitting the dataset into clean and dirty
+
+Let us identify the incomplete locations. We can see from the output that there are `r df_raw |>filter(is.na(state) | is.na(pcode1) | is.na(municipality) | is.na(pcode2) | is.na(parrish) | is.na(pcode3)) |> nrow()` rows with missing geographic data. 
+
+
+```{r echo = TRUE}
+df_raw |> 
+  filter(is.na(state) | is.na(pcode1) |
+         is.na(municipality) | is.na(pcode2) |
+         is.na(parrish) | is.na(pcode3)) |> 
+  nrow()
+```
+
+We will split off these rows to be cleaned. We will combine it back together later. 
+
+
+```{r split-clean-dirty, echo=TRUE}
+# splitting into two datasets, one clean one dirty. 
+locations_dirty <- df_raw %>% 
+  filter(is.na(state) | is.na(pcode1) |
+         is.na(municipality) | is.na(pcode2) |
+         is.na(parrish) | is.na(pcode3))
+
+locations_clean <- df_raw %>% 
+  filter(!is.na(state) & !is.na(pcode1) &
+         !is.na(municipality) & !is.na(pcode2) &
+         !is.na(parrish) & !is.na(pcode3)) 
+
+```
+
+<br>
+
+### 3c. Fill in missing values with `coalesce()`
+
+The `locations.csv` reference dataset is used to clean `locations_dirty` and rewrite it. The `distinct()` call at the end is to ensure that there are no duplicates. After which, we combine `locations_clean` and `locations_dirty` into `df_raw_locations`. 
+
+<br>
+
+
+```{r fill in missing values, echo=TRUE}
+# filling in missing values
+locations_dirty <- locations_dirty %>% 
+  left_join(locations, by = "location") %>% 
+  mutate(state    = coalesce(state.x, state.y),
+         pcode1    = coalesce(pcode1.x, pcode1.y),
+         municipality = coalesce(municipality.x, municipality.y),
+         pcode2    = coalesce(pcode2.x, pcode2.y),
+         parrish = coalesce(parrish.x, parrish.y),
+         pcode3    = coalesce(pcode3.x, pcode3.y)) %>% 
+  select(-state.x, -state.y, -pcode1.x, -pcode1.y,
+         -municipality.x, -municipality.y, -pcode2.x, -pcode2.y,
+         -parrish.x, -parrish.y, -pcode3.x, -pcode3.y) %>% 
+  distinct() # removing duplicate rows from the join 
+
+# bind_rows() does not care about column sequence 
+# but put adm_clean first so that the original order is preserved
+df_raw_locations <- bind_rows(locations_clean, locations_dirty)
+
+```
+
+<br><br>
+
+### 3d. Error checking the join
+
+Printing out the sum of the `total_beneficiaries` and the number of rows in `df_raw`(original dataset) and `df_raw_locations`(updated, with the locations cleaned). 
+
+
+```{r join-error-check, echo = TRUE}
+# error checking
+rbind(sum(df_raw$total_beneficiaries, na.rm = TRUE),
+      sum(df_raw_locations$total_beneficiaries, na.rm = TRUE),
+      nrow(df_raw),
+      nrow(df_raw_locations))
+```
+
+Everything seems in order, and we have not duplicated or dropped any rows from the original dataset. 
+
+
+<br><br><br>
+
+
+## 4. Beneficiary disaggregation 
+
+Let us next check on the beneficiary disaggregations by comparing the sum of all disaggregated beneficiaries against the reported total. We will mutate two new columns: `total_disagg_ben`, which is the sum of all sex and age-disaggregated beneficiaries and `no_disagg_ben` for beneficiaries reported without sex and age information. Depending on reporting standards of each cluster, we will have different uses for the disaggregated and non-disaggregated numbers. 
+
+
+
+```{r bencheck-and-no-esp-ben, echo=TRUE }
+# mutating bencheck and unspecified beneficiaries columns 
+df_raw_locations <- df_raw_locations %>% 
+  mutate(total_disagg_ben = select(., m_0_3:m_19_and_older) %>%  rowSums(na.rm = TRUE), 
+         no_disagg_ben = round(total_beneficiaries) - round(total_disagg_ben)) 
+
+```
+
+
+Let us print the rows where the sum of disaggregated beneficiaries (`total_disagg_ben`) does not match the totals reported in the `total_beneficiaries` column, so that we can return to the relevant parties for follow up. 
+
+
+```{r printing-bencheck}
+# printing the bencheck
+# the round is necessary due to floating point arithmetic as some values are
+# close enough to 0 to be ignored by us but not by R. 
+
+df_raw_locations %>% 
+  filter(round(total_beneficiaries) != round(total_disagg_ben)) %>% 
+  select(implementing_partner, activity_description, 
+         location, total_disagg_ben, total_beneficiaries, no_disagg_ben) |> 
+  kable(caption = "Undisaggregated beneficiaries") %>%
+  kable_styling(bootstrap_options = "bordered", font_size = 12, full_width = FALSE)
+```
+
+<br>
+
+In this scenario, we would have returned to these three partners and asked for corrections. 
+
+<br><br><br>
+
+
+## 5. Outputs
+
+### 5a. Cleaned wide version
+
+We can now share a clean version of the wide file with OCHA, they will generally prefer a wide table, in the same shape as the 5W form: 
+
+```{r cleaned-wide, echo=TRUE, eval=FALSE}
+# turn on eval if you want the file
+write_csv(df_raw_locations, paste0(format(Sys.time(), "%y%m%d_%H%M_"), "5W_wide.csv"))
+```
+
+<br><br>
+
+
+### 5b. Unique beneficiaries
+
+This section pivots the dataset longer into a tidy format -- normal 5W templates tend to "wide", with the totals and beneficiary disaggregations all in one row. We use a long format to make things easier for plotting and analysis. 
+
+We will also create the dataset `unique_ben` to aid in our estimations of the actual reach of the programme. This is distinct from the concept of a beneficiary frequency, which is one person reached by one activity and does not account for double counting. 
+
+Unique beneficiaries are the individuals who have been reached by at least one programme activity. Frequencies are important for budgetary reasons and to show the full scale of the programme. Unique beneficiaries show a more accurate picture of the programme's footprint and are very useful for coordinating activities with other clusters. 
+
+The gold standard for avoiding double counting is the deployment of a beneficiary database. However, most agencies are not able to do this. In lieu of that, to avoid double counting and estimate the number of unique beneficiaries, we will only add the highest number of beneficiaries reached at each project site (location). 
+
+At this point, we will also filter out the activity CA1.05, which the promotion of key messages for the education community, specifically, we will filter out all activities where the location is "radio" or "fm station". Mass messaging activities do not typically count towards beneficiary totals as they are quite light-touch, especially in comparison to education kits, school feeding or work with out-of-school children. If need be, we can always analyse the radio messaging activity on its own. 
+
+Ideally, we would codify all this by developing indicator guidance for the cluster, though it did take a few years for the office to systematise.  
+
+
+```{r unique-benficiaries, echo=TRUE}
+# pivoting longer and creating new dataframe
+unique_ben <- df_raw_locations |> 
+  filter(!str_detect(location, "radio|fm")) |> 
+  select(-total_disagg_ben) |> 
+  pivot_longer(m_0_3:no_disagg_ben, 
+               names_to = "disaggregation", values_to = "beneficiaries") |>  
+  filter(recurrent_beneficiaries == "no") |> 
+  filter(beneficiaries != 0) %>% # empty cells are 0 in the 5W table
+  group_by(location, disaggregation)|> 
+  slice(which.max(beneficiaries)) |>  
+  ungroup() |>  
+  select(month_reported, state, pcode1, municipality, pcode2,
+       parrish, pcode3, location, latitude, longitude, 
+       disaggregation, beneficiaries)
+```
+
+
+```{r writing-u-ben-csv, echo=TRUE, eval=FALSE}
+# writing csv of unique_ben with datestamp
+# turn on eval if you want the file 
+write_csv(unique_ben, paste0(format(Sys.time(), "%y%m%d_%H%M_"), "unique_ben.csv"))
+# Without date stamp
+write_csv(unique_ben, paste0("unique_ben.csv"))
+```
+
+<br><br>
+
+### 5c. Beneficiaries by activity
+
+Let us also make the dataset `activity_ben` for activity-wise analysis. As with `unique_ben`, recurrent beneficiaries have been filtered out. Similar to `unique_ben`, this dataset has also been pivoted longer into a tidy format. 
+
+Please note that there is double counting in this dataset as beneficiaries might have been reached by more than one activity. For geographic analysis, please use `unique_ben`. 
+
+
+```{r}
+df_raw_locations |> glimpse()
+```
+
+
+```{r beneficiaries-by-activity, echo=TRUE}
+# This is the dataset for beneficiaries
+activity_ben <- df_raw_locations |> 
+  filter(!str_detect(location, "radio|fm")) |> 
+  select(-total_disagg_ben) |> 
+  pivot_longer(m_0_3:no_disagg_ben, 
+               names_to = "disaggregation", values_to = "beneficiaries") |>  
+  filter(recurrent_beneficiaries == "no") |> 
+  filter(beneficiaries != 0) %>% # empty cells are 0 in the 5W table
+  select(month_reported, project_name, implementing_partner, 
+         state, pcode1, municipality, pcode2, 
+         parrish, pcode3, location, latitude, longitude, 
+         activity_code, activity_description, activity_covid,
+         disaggregation, beneficiaries)
+
+```
+
+
+
+```{r writing-act-ben-csv, echo=TRUE, eval=FALSE}
+# writing csv activity_ben with datestamp
+# turn on eval if you want the file 
+
+write_csv(activity_ben, paste0(format(Sys.time(), "%y%m%d_%H%M_"), "activity_ben.csv"))
+# Without date stamp
+write_csv(activity_ben, paste0("activity_ben.csv"))
+```
+
+<br><br>
+
+### 5d. Comparing `unique_ben`, `activity_ben` and difference
+
+Printed below are the numbers of unique beneficiaries, beneficiary frequencies and the difference between the two figures.
+
+<br>
+
+```{r comparing}
+
+rbind(sum(unique_ben$beneficiaries),
+      sum(activity_ben$beneficiaries),
+      sum(unique_ben$beneficiaries) - sum(activity_ben$beneficiaries))
+```
+<br>
+
+[Click through]() to the next part, where will go through 5W reporting and make use the cleaned datasets. 
+
