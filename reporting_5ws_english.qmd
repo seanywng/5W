@@ -56,9 +56,9 @@ options(scipen = 100)
 
 <br>
 
-This is the second part of this primer on cleaning and reporting 5W data. For the first part on data cleaning, please see [here]().
+This is the second part of this primer on cleaning and reporting 5W data. For the first part on data cleaning, please see [here](https://seanywng.github.io/5W/cleaning_5ws_english).
 
-This is an entirely automated report -- all charts and tables, as well as all figures within the report have been generated from the clean data (the output of the [cleaning script]()), with no manual input. The output of this report will be an HTML file which we will publish online. If desired, a PDF of this report may also be generated.
+This is an entirely automated report -- all charts and tables, as well as all figures within the report have been generated from the clean data (the output of the [cleaning script](https://github.com/seanywng/5W/blob/main/cleaning_5ws_english.qmd)), with no manual input. The output of this report will be an HTML file which we will publish online. If desired, a PDF of this report may also be generated.
 
 This set of 5W data pertains to the Education Cluster in Venezuela and has had all partner information (except that of UNICEF) removed. This is a generic 5W report, intended for external audiences and management. An example of a more thorough analysis of coverage and gaps can be found [here](https://seanywng.github.io/coverage_gaps_venezuela/).
 

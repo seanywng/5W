@@ -76,6 +76,8 @@ This page documents they typical cleaning process I would employ for programmati
 
 We will be using data from the Education Cluster in Venezuela with partner names recoded. For another example of a cleaning script for 5Ws, please see [here](https://github.com/kenya-eie-wg/eie_wg_5ws/blob/main/5Ws_cleaning_script.Rmd).
 
+Click [here](https://seanywng.github.io/5W/reporting_5ws_english) to jump to an example 5Ws reporting script. 
+
 <br><br><br>
 
 ## 1. Reading in the data
@@ -634,5 +636,5 @@ rbind(sum(unique_ben$beneficiaries),
 ```
 <br>
 
-[Click through]() to the next part, where will go through 5W reporting and make use the cleaned datasets. 
+[Click through](https://seanywng.github.io/5W/reporting_5ws_english) to the next part, where will go through 5W reporting and make use the cleaned datasets. 
 
