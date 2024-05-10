@@ -587,11 +587,6 @@ Let us also make the dataset `activity_ben` for activity-wise analysis. As with 
 Please note that there is double counting in this dataset as beneficiaries might have been reached by more than one activity. For geographic analysis, please use `unique_ben`. 
 
 
-```{r}
-df_raw_locations |> glimpse()
-```
-
-
 ```{r beneficiaries-by-activity, echo=TRUE}
 # This is the dataset for beneficiaries
 activity_ben <- df_raw_locations |> 
