@@ -10,6 +10,7 @@ format:
   html:
     page-layout: full
     code-tools: true
+    self-contained: true
 ---
 
 ```{r setup, include=FALSE}
@@ -767,7 +768,7 @@ all_mun %>%
         legend.title = element_blank(),
         plot.title = element_text(size = 12)) + 
 
-# map of percent of enrolled chidren covered by pcode2
+# map of percent of enrolled children covered by pcode2
 all_mun %>% 
   mutate(coverage_percent = round(coverage_percent * 100)) |> 
   right_join(pcode2_shape) %>% 

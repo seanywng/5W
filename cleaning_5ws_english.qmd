@@ -10,6 +10,7 @@ format:
   html:
     page-layout: full
     code-tools: true
+    self-contained: true
 ---
 
 # A. Cleaning the 5W data
